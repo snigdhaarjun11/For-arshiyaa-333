@@ -7,125 +7,129 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         body { 
-            margin: 0; height: 100vh; background: #0a0a0a; 
-            font-family: 'Helvetica Neue', sans-serif; overflow: hidden; 
+            margin: 0; padding: 0; height: 100vh; background: #fff5f7; 
+            font-family: 'Arial Rounded MT Bold', sans-serif; overflow: hidden; 
             display: flex; flex-direction: column; align-items: center;
         }
 
-        #canvas-container {
-            position: absolute; top: 0; left: 0; width: 100%; height: 70vh;
-            display: flex; justify-content: center; z-index: 5;
+        /* This is where the physics world lives */
+        #viewport {
+            width: 100vw; height: 70vh; position: relative;
         }
 
-        /* Visual Vase */
-        .vase-glass {
-            position: absolute; bottom: 20px; width: 180px; height: 260px;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-top: none;
+        /* The visual vase - adjusted to be perfectly centered */
+        .vase-overlay {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            width: 180px; height: 260px;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(10px);
+            border: 2px solid white; border-top: none;
             border-radius: 0 0 50px 50px;
             z-index: 10; pointer-events: none;
         }
 
         .controls {
-            position: fixed; bottom: 0; height: 30vh; width: 100%;
-            background: #111; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; gap: 20px;
-            z-index: 20; border-top: 1px solid #222;
+            width: 100%; height: 30vh; background: white;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 15px; z-index: 20;
+            box-shadow: 0 -10px 20px rgba(0,0,0,0.05);
         }
 
-        .flower-options { display: flex; gap: 15px; }
+        .f-options { display: flex; gap: 15px; }
 
         .f-btn {
-            font-size: 28px; cursor: pointer; background: #1a1a1a;
-            border: 1px solid #333; padding: 10px; border-radius: 12px;
+            font-size: 35px; cursor: pointer; background: #fff;
+            border: 2px solid #ffe4e1; padding: 10px; border-radius: 15px;
             transition: 0.2s;
         }
-        .f-btn:hover { border-color: #fbbf24; transform: translateY(-3px); }
+        .f-btn:hover { transform: scale(1.1); border-color: #ff4d7d; }
 
         .next-btn {
-            padding: 15px 45px; background: #fbbf24; color: #000;
-            border: none; letter-spacing: 4px; text-transform: uppercase;
-            font-size: 0.75rem; cursor: pointer; font-weight: bold;
+            padding: 15px 40px; background: #ff4d7d; color: white;
+            border: none; border-radius: 50px; font-weight: bold;
+            text-transform: uppercase; letter-spacing: 2px; cursor: pointer;
         }
     </style>
 </head>
 <body>
 
-    <div id="canvas-container">
-        <div class="vase-glass"></div>
+    <div id="viewport">
+        <div class="vase-overlay"></div>
     </div>
 
     <div class="controls">
-        <div class="flower-options">
-            <div class="f-btn" onclick="dropFlower('🌻')">🌻</div>
-            <div class="f-btn" onclick="dropFlower('🌷')">🌷</div>
-            <div class="f-btn" onclick="dropFlower('🌸')">🌸</div>
-            <div class="f-btn" onclick="dropFlower('🌹')">🌹</div>
-            <div class="f-btn" onclick="dropFlower('🌿')">🌿</div>
+        <div class="f-options">
+            <div class="f-btn" onclick="addFlower('🌻')">🌻</div>
+            <div class="f-btn" onclick="addFlower('🌷')">🌷</div>
+            <div class="f-btn" onclick="addFlower('🌸')">🌸</div>
+            <div class="f-btn" onclick="addFlower('🌹')">🌹</div>
+            <div class="f-btn" onclick="addFlower('🌿')">🌿</div>
         </div>
-        <button class="next-btn" onclick="window.location.href='ask.html'">I'm Ready</button>
+        <button class="next-btn" onclick="window.location.href='ask.html'">Finish Bouquet ❤️</button>
     </div>
 
     <audio id="bg-music" loop><source src="yellow.mp3" type="audio/mpeg"></audio>
 
     <script>
         const { Engine, Render, Runner, Bodies, Composite } = Matter;
-        const engine = Engine.create();
-        const container = document.getElementById('canvas-container');
 
+        // 1. Setup Engine
+        const engine = Engine.create();
+        const viewport = document.getElementById('viewport');
+
+        // 2. Setup Renderer
         const render = Render.create({
-            element: container,
+            element: viewport,
             engine: engine,
             options: {
                 width: window.innerWidth,
-                height: window.innerHeight * 0.7,
+                height: viewport.offsetHeight,
                 wireframes: false,
                 background: 'transparent'
             }
         });
 
-        // PHYSICS BOUNDARIES
-        const centerX = window.innerWidth / 2;
-        const floorY = (window.innerHeight * 0.7) - 25;
+        // 3. Create Physical Vase Boundaries
+        const cx = window.innerWidth / 2;
+        const baseLine = viewport.offsetHeight - 40;
 
-        // Thick floor (60px) to prevent flowers from falling through
-        const ground = Bodies.rectangle(centerX, floorY + 30, 180, 60, { 
-            isStatic: true, 
-            friction: 1, // High friction so they don't slide around like ice
-            render: { visible: false } 
-        });
+        const floor = Bodies.rectangle(cx, baseLine + 10, 180, 40, { isStatic: true, friction: 0.5, render: { visible: false } });
+        const wallL = Bodies.rectangle(cx - 95, baseLine - 120, 20, 260, { isStatic: true, angle: -0.05, render: { visible: false } });
+        const wallR = Bodies.rectangle(cx + 95, baseLine - 120, 20, 260, { isStatic: true, angle: 0.05, render: { visible: false } });
 
-        const leftWall = Bodies.rectangle(centerX - 95, floorY - 130, 20, 300, { 
-            isStatic: true, angle: -0.05, friction: 1, render: { visible: false } 
-        });
+        Composite.add(engine.world, [floor, wallL, wallR]);
 
-        const rightWall = Bodies.rectangle(centerX + 95, floorY - 130, 20, 300, { 
-            isStatic: true, angle: 0.05, friction: 1, render: { visible: false } 
-        });
-
-        Composite.add(engine.world, [ground, leftWall, rightWall]);
-
-        function dropFlower(emoji) {
-            // Circle physics body
-            const flower = Bodies.circle(centerX + (Math.random() * 20 - 10), 0, 22, {
-                restitution: 0.3, // Low bounce for realistic settling
-                friction: 0.8,    // High friction to help stacking
-                density: 0.01,
+        // 4. Drop Flower Logic
+        function addFlower(emoji) {
+            const flower = Bodies.circle(cx + (Math.random()*40-20), 0, 25, {
+                restitution: 0.4,
+                friction: 0.3,
                 render: {
-                    sprite: { texture: createEmojiCanvas(emoji) }
+                    sprite: { texture: createTexture(emoji) }
                 }
             });
             Composite.add(engine.world, flower);
         }
 
-        function createEmojiCanvas(emoji) {
-            const c = document.createElement('canvas');
-            c.width = 64; c.height = 64;
-            const ctx = c.getContext('2d');
-            ctx.font = '42px serif';
+        function createTexture(emoji) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.font = '45px serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(emoji, 32, 32);
-            return
+            return canvas.toDataURL();
+        }
+
+        // 5. Run it
+        Render.run(render);
+        Runner.run(Runner.create(), engine);
+
+        // Music Persistence
+        if (sessionStorage.getItem('musicPlaying') === 'true') {
+            document.getElementById('bg-music').play().catch(() => {});
+        }
+    </script>
+</body>
+</html>
